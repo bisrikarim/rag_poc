@@ -1,7 +1,7 @@
-# AIA RAG — Complete Documentation
+# RAG POC — Complete Documentation
 
 > **Language:** English  
-> **Project:** Retrieval-Augmented Generation POC on AIA / AlethAIA Confluence documentation  
+> **Project:** Retrieval-Augmented Generation POC on internal Confluence documentation  
 > **Stack:** PyMuPDF · Sentence-Transformers · ChromaDB · FastAPI · Ollama (mistral:7b)
 
 ---
@@ -27,7 +27,7 @@ Large Language Models (LLMs) like Mistral or GPT are trained on massive datasets
 - Events after their training date
 - Private or confidential information specific to your organization
 
-If you ask a raw LLM *"What are the Vault principals used in AIA métier?"*, it simply cannot know. It will either say it doesn't know, or — worse — hallucinate a plausible-sounding but wrong answer.
+If you ask a raw LLM a question about your internal docs, it simply cannot know. It will either say it doesn't know, or — worse — hallucinate a plausible-sounding but wrong answer.
 
 ### The RAG Solution
 
@@ -137,11 +137,11 @@ Base Model  +  Vector DB (your docs)  ──►  Grounded answers at runtime
 | **Hallucination risk** | Low (grounded in context) | Medium (baked-in knowledge) |
 | **Best for** | Q&A on internal docs, wikis, support | Style transfer, domain syntax |
 
-### What this POC uses
+### Why this POC uses RAG
 
 This project is a **RAG** system. The choice is deliberate:
 
-- AIA documentation on Confluence evolves regularly
+- Internal documentation evolves regularly
 - You need to trace which document answered which question
 - The entire stack runs 100% locally on your laptop (no cloud, no GPU required)
 - A new document is available instantly after re-running `ingest.py`
@@ -203,8 +203,8 @@ rag_poc/
 ### Step 1 — Clone the repository
 
 ```powershell
-git clone https://github.com/YOUR_USERNAME/aia-rag-poc.git
-cd aia-rag-poc
+git clone https://github.com/bisrikarim/rag_poc.git
+cd rag_poc
 ```
 
 ### Step 2 — Create and activate the virtual environment
@@ -255,8 +255,8 @@ Expected output:
 ```
 📂 PDF folder: ./pdfs
 🤖 Loading embedding model: all-MiniLM-L6-v2 …
-✅ ChromaDB collection created: 'aia_docs'
-📄 Processing: Configuration_ssh_...pdf
+✅ ChromaDB collection created: 'docs'
+📄 Processing: my-document.pdf
   → 12 chunks generated
 ...
 ✅ Ingestion complete — 87 chunks stored in ChromaDB
@@ -339,23 +339,6 @@ This allows you to verify and trace every answer back to its source document.
 
 ---
 
-### Example questions for AIA documentation
-
-Here are questions that work well with the indexed documents:
-
-```
-What is the "golden ticket" problem in SSH authentication?
-How does the Vault principal segmentation work?
-What are the SSH prerequisites on target machines?
-Explain the K3S ephemeral cluster deployment pipeline.
-What is the role of the SOT in the AIA métier architecture?
-How does JWT authentication work with Vault?
-What happens if the SSH configuration is broken on a target?
-What is the difference between the Producer and Consumer workloads?
-```
-
----
-
 ### Adding new documents
 
 1. Copy new PDFs into the `pdfs/` folder
@@ -391,7 +374,7 @@ The FastAPI server is not reachable.
 
 ```powershell
 # Check that uvicorn is running on port 8000
-# If you see an error like "Address already in use":
+# If you see "Address already in use":
 uvicorn server:app --reload --port 8001
 # Then open http://localhost:8001
 ```
@@ -401,18 +384,17 @@ uvicorn server:app --reload --port 8001
 The Ollama service is not running.
 
 ```powershell
-# Start it in Terminal 1:
 ollama serve
 ```
 
 ### Ollama takes too long / times out
 
 Normal behavior on CPU for a 7B model. First query after starting is slower (model load).  
-If it consistently times out, the timeout in `server.py` can be increased:
+If it consistently times out, increase the timeout in `server.py`:
 
 ```python
-# server.py, line ~80
-timeout=300   # increase from 180 to 300 seconds
+# server.py — increase from 180 to 300
+timeout=300
 ```
 
 ### "Collection not found" error on server start
@@ -425,10 +407,9 @@ python ingest.py --pdf_dir ./pdfs
 
 ### Answers seem irrelevant or off-topic
 
-The retrieval may not be finding the right chunks. Try:
-- Rephrasing your question with more specific terms
-- Checking that the relevant PDF was actually ingested (look at the Sources panel)
-- Re-running ingestion if you recently added documents
+- Rephrase your question with more specific terms
+- Check that the relevant PDF was actually ingested (look at the Sources panel)
+- Re-run ingestion if you recently added documents
 
 ### PowerShell execution policy error on `.venv\Scripts\Activate.ps1`
 
@@ -440,18 +421,12 @@ Then retry activation.
 
 ---
 
-## Pushing to GitHub
+## Pushing updates to GitHub
 
 ```powershell
-# In the project folder
-git init
 git add .
-git commit -m "feat: initial RAG POC on AIA documentation"
-
-# Create the repo on github.com first, then:
-git remote add origin https://github.com/YOUR_USERNAME/aia-rag-poc.git
-git branch -M main
-git push -u origin main
+git commit -m "your message"
+git push
 ```
 
 The `.gitignore` ensures that `pdfs/`, `chroma_db/`, and `.venv/` are **never pushed**.  

@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>AIA RAG — Assistant Documentaire</title>
+<title>RAG POC — Document Assistant</title>
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@300;400;500;600&display=swap" rel="stylesheet" />
 <style>
@@ -280,7 +280,7 @@
 <body>
 
 <header>
-  <div class="logo">AIA <span>//</span> RAG</div>
+  <div class="logo">RAG <span>//</span> POC</div>
   <span id="status-label">connexion…</span>
   <div class="status-dot" id="status-dot"></div>
 </header>
@@ -290,12 +290,12 @@
     <div id="messages">
       <div class="empty-state" id="empty-state">
         <div class="icon">📚</div>
-        <p>Pose une question sur la documentation AIA</p>
+        <p>Pose une question sur la internal documentation</p>
         <div class="suggestion-chips">
-          <div class="chip" onclick="ask(this.textContent)">Qu'est-ce que le golden ticket SSH ?</div>
-          <div class="chip" onclick="ask(this.textContent)">Comment fonctionne le déploiement K3S ?</div>
-          <div class="chip" onclick="ask(this.textContent)">Quels sont les prérequis SSH côté cible ?</div>
-          <div class="chip" onclick="ask(this.textContent)">Rôles Vault et principaux, comment ça marche ?</div>
+          <div class="chip" onclick="ask(this.textContent)">What are the main topics covered in the documentation?</div>
+          <div class="chip" onclick="ask(this.textContent)">Summarize the key architecture decisions</div>
+          <div class="chip" onclick="ask(this.textContent)">What are the prerequisites for the deployment?</div>
+          <div class="chip" onclick="ask(this.textContent)">What security constraints are described?</div>
         </div>
       </div>
     </div>
@@ -311,7 +311,7 @@
 
 <div class="input-bar-wrap">
   <div class="input-bar">
-    <textarea id="question" rows="1" placeholder="Pose ta question sur la doc AIA…"></textarea>
+    <textarea id="question" rows="1" placeholder="Pose ta question sur your documentation…"></textarea>
     <button id="send-btn" onclick="sendQuery()">Envoyer →</button>
   </div>
 </div>

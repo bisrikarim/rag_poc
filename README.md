@@ -1,6 +1,6 @@
-# AIA RAG POC
+# RAG POC
 
-> Retrieval-Augmented Generation on AIA / AlethAIA Confluence documentation.  
+> Retrieval-Augmented Generation on internal Confluence documentation.  
 > 100% local — no cloud, no API key required.
 
 **Stack:** PyMuPDF · Sentence-Transformers · ChromaDB · FastAPI · Ollama (mistral:7b)

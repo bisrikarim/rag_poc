@@ -13,14 +13,14 @@ from sentence_transformers import SentenceTransformer
 
 # ── Config ────────────────────────────────────────────────────────────────────
 CHROMA_DIR   = "./chroma_db"
-COLLECTION   = "aia_docs"
+COLLECTION   = "docs"
 EMBED_MODEL  = "all-MiniLM-L6-v2"
 TOP_K        = 5
 OLLAMA_URL   = "http://localhost:11434/api/generate"
 OLLAMA_MODEL = "mistral:7b"
 # ─────────────────────────────────────────────────────────────────────────────
 
-app = FastAPI(title="RAG AIA POC")
+app = FastAPI(title="RAG POC")
 
 app.add_middleware(
     CORSMiddleware,

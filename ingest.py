@@ -15,7 +15,7 @@ from sentence_transformers import SentenceTransformer
 
 # ── Config ────────────────────────────────────────────────────────────────────
 CHROMA_DIR  = "./chroma_db"
-COLLECTION  = "aia_docs"
+COLLECTION  = "docs"
 EMBED_MODEL = "all-MiniLM-L6-v2"
 CHUNK_SIZE  = 500   # caractères
 CHUNK_OVERLAP = 80
