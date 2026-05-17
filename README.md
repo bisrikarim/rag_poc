@@ -1,98 +1,87 @@
-# RAG POC — Documentation AIA
+# AIA RAG POC
 
-Stack : PyMuPDF · Sentence-Transformers · ChromaDB · FastAPI · Ollama (mistral:7b)
-Tout tourne en local, aucune clé API requise.
+> Retrieval-Augmented Generation on AIA / AlethAIA Confluence documentation.  
+> 100% local — no cloud, no API key required.
+
+**Stack:** PyMuPDF · Sentence-Transformers · ChromaDB · FastAPI · Ollama (mistral:7b)
 
 ---
 
-## 1. Créer et activer le venv
+## Quick Start
+
+### 1. Clone & create virtual environment
 
 ```powershell
-# Dans le dossier du projet
+git clone https://github.com/bisrikarim/rag_poc.git
+cd rag_poc
+
 python -m venv .venv
-
-# Activation (PowerShell)
 .venv\Scripts\Activate.ps1
-
-# Activation (CMD)
-.venv\Scripts\activate.bat
 ```
 
-Tu dois voir `(.venv)` au début de ta ligne de commande.
-
----
-
-## 2. Installer les dépendances
+### 2. Install dependencies
 
 ```powershell
-pip install pymupdf sentence-transformers chromadb fastapi uvicorn requests
+pip install -r requirements.txt
 ```
 
----
-
-## 3. Télécharger le modèle Ollama
+### 3. Pull the Ollama model
 
 ```powershell
 ollama pull mistral:7b
 ```
 
-Taille : ~4.1 GB — à faire une seule fois.
-
----
-
-## 4. Structure du projet
-
-```
-rag_poc/
-├── ingest.py          <- ingestion des PDFs
-├── server.py          <- serveur FastAPI + Ollama
-├── static/
-│   └── index.html     <- interface web
-├── pdfs/              <- mets tes PDFs ici
-├── chroma_db/         <- créé automatiquement
-└── .venv/             <- environnement Python isolé
-```
-
----
-
-## 5. Ingestion des PDFs
-
-Place tes PDFs dans `pdfs/` puis, avec le venv activé :
+### 4. Add your PDFs and ingest
 
 ```powershell
+# Drop your PDFs into the pdfs/ folder, then:
 python ingest.py --pdf_dir ./pdfs
 ```
 
-Durée estimée : 1-3 minutes pour 6 PDFs.
-La base ChromaDB est persistée dans `./chroma_db/` — pas besoin de re-ingérer à chaque démarrage.
-
----
-
-## 6. Lancer le POC (2 terminaux)
+### 5. Start the application (2 terminals)
 
 **Terminal 1 — Ollama**
 ```powershell
 ollama serve
 ```
 
-**Terminal 2 — Serveur FastAPI (venv activé)**
+**Terminal 2 — API server**
 ```powershell
 .venv\Scripts\Activate.ps1
 uvicorn server:app --reload --port 8000
 ```
 
----
+### 6. Open the UI
 
-## 7. Ouvrir l'interface
-
-http://localhost:8000
-
-Le point de statut en haut à droite passe au vert quand tout est prêt.
+**http://localhost:8000**
 
 ---
 
-## Notes
+## Project Structure
 
-- Réponse Ollama : ~30-90s sur CPU (mistral:7b Q4 sans GPU dédié — normal)
-- Pour re-ingérer après ajout de PDFs : relancer `python ingest.py --pdf_dir ./pdfs`
-- Pour changer de modèle : modifier `OLLAMA_MODEL` dans `server.py` + `ollama pull <modele>`
+```
+rag_poc/
+├── ingest.py           ← Parse PDFs → chunks → embeddings → ChromaDB
+├── server.py           ← FastAPI server + Ollama query
+├── static/
+│   └── index.html      ← Web interface
+├── pdfs/               ← Drop your PDFs here (gitignored)
+├── chroma_db/          ← Vector database, auto-created (gitignored)
+├── requirements.txt
+└── DOCUMENTATION.md    ← Full documentation (RAG intro, RAG vs Fine-Tuning, user manual)
+```
+
+---
+
+## Full Documentation
+
+See **[DOCUMENTATION.md](./DOCUMENTATION.md)** for:
+- Introduction to RAG
+- RAG vs Fine-Tuning comparison
+- Detailed architecture
+- Complete user manual
+- Troubleshooting guide
+
+---
+
+*Note: `pdfs/`, `chroma_db/`, and `.venv/` are gitignored — your documents never leave your machine.*
