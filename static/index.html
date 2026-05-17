@@ -1,0 +1,470 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>AIA RAG — Assistant Documentaire</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@300;400;500;600&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    --bg:       #0d0f14;
+    --surface:  #161a23;
+    --border:   #252a38;
+    --accent:   #4f8ef7;
+    --accent2:  #27e8a7;
+    --muted:    #4a5168;
+    --text:     #d8dde8;
+    --text-dim: #7a8199;
+    --danger:   #f75e5e;
+    --radius:   6px;
+    --mono:     'IBM Plex Mono', monospace;
+    --sans:     'IBM Plex Sans', sans-serif;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    font-size: 14px;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* ── Header ── */
+  header {
+    border-bottom: 1px solid var(--border);
+    padding: 16px 28px;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    position: sticky;
+    top: 0;
+    background: var(--bg);
+    z-index: 10;
+  }
+  .logo {
+    font-family: var(--mono);
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--accent);
+    letter-spacing: .06em;
+    text-transform: uppercase;
+  }
+  .logo span { color: var(--accent2); }
+  .status-dot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    background: var(--muted);
+    margin-left: auto;
+    transition: background .3s;
+  }
+  .status-dot.online  { background: var(--accent2); box-shadow: 0 0 8px var(--accent2); }
+  .status-dot.loading { background: var(--accent);  box-shadow: 0 0 8px var(--accent); animation: pulse 1s infinite; }
+  .status-dot.error   { background: var(--danger);  box-shadow: 0 0 8px var(--danger); }
+  #status-label { font-family: var(--mono); font-size: 11px; color: var(--text-dim); }
+
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.4} }
+
+  /* ── Layout ── */
+  main {
+    flex: 1;
+    display: grid;
+    grid-template-columns: 1fr 320px;
+    gap: 0;
+    max-width: 1200px;
+    width: 100%;
+    margin: 0 auto;
+    padding: 28px 28px 100px;
+  }
+  @media(max-width:768px) {
+    main { grid-template-columns: 1fr; }
+    .sidebar { display: none; }
+  }
+
+  /* ── Chat pane ── */
+  .chat-pane { padding-right: 28px; }
+
+  #messages {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+    min-height: 200px;
+  }
+
+  .msg {
+    display: flex;
+    gap: 12px;
+    animation: fadeUp .25s ease both;
+  }
+  @keyframes fadeUp { from{opacity:0;transform:translateY(8px)} to{opacity:1;transform:none} }
+
+  .msg-avatar {
+    width: 28px; height: 28px;
+    border-radius: var(--radius);
+    display: flex; align-items: center; justify-content: center;
+    font-family: var(--mono); font-size: 10px; font-weight: 600;
+    flex-shrink: 0;
+    margin-top: 2px;
+  }
+  .msg.user .msg-avatar  { background: var(--accent);  color: #fff; }
+  .msg.bot  .msg-avatar  { background: #1e2d4a;        color: var(--accent); border: 1px solid var(--accent); }
+
+  .msg-body { flex: 1; }
+
+  .msg-role {
+    font-family: var(--mono); font-size: 10px; color: var(--text-dim);
+    text-transform: uppercase; letter-spacing: .08em; margin-bottom: 5px;
+  }
+
+  .msg-text {
+    line-height: 1.65;
+    white-space: pre-wrap;
+    color: var(--text);
+  }
+  .msg.user .msg-text {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 10px 14px;
+    color: var(--text);
+  }
+
+  /* thinking spinner */
+  .thinking {
+    display: flex; align-items: center; gap: 6px;
+    font-family: var(--mono); font-size: 12px; color: var(--accent);
+  }
+  .thinking-dots span {
+    display: inline-block; width: 5px; height: 5px;
+    border-radius: 50%; background: var(--accent);
+    animation: bounce 1.2s infinite;
+  }
+  .thinking-dots span:nth-child(2) { animation-delay: .2s; }
+  .thinking-dots span:nth-child(3) { animation-delay: .4s; }
+  @keyframes bounce { 0%,80%,100%{transform:translateY(0)} 40%{transform:translateY(-5px)} }
+
+  /* ── Input bar ── */
+  .input-bar {
+    position: fixed;
+    bottom: 0; left: 0; right: 0;
+    background: var(--bg);
+    border-top: 1px solid var(--border);
+    padding: 14px 28px;
+    display: flex;
+    gap: 10px;
+    align-items: flex-end;
+    max-width: 1200px;
+    margin: 0 auto;
+  }
+  /* centering trick for fixed bar */
+  .input-bar-wrap {
+    position: fixed;
+    bottom: 0; left: 0; right: 0;
+    background: var(--bg);
+    border-top: 1px solid var(--border);
+    z-index: 20;
+  }
+  .input-bar {
+    position: static;
+    max-width: 1200px;
+    margin: 0 auto;
+  }
+
+  #question {
+    flex: 1;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    color: var(--text);
+    font-family: var(--sans);
+    font-size: 14px;
+    padding: 10px 14px;
+    resize: none;
+    outline: none;
+    max-height: 120px;
+    line-height: 1.5;
+    transition: border-color .2s;
+  }
+  #question::placeholder { color: var(--muted); }
+  #question:focus { border-color: var(--accent); }
+
+  #send-btn {
+    background: var(--accent);
+    color: #fff;
+    border: none;
+    border-radius: var(--radius);
+    padding: 10px 18px;
+    font-family: var(--mono);
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: opacity .2s, transform .1s;
+    white-space: nowrap;
+    align-self: flex-end;
+  }
+  #send-btn:hover:not(:disabled) { opacity: .85; }
+  #send-btn:active:not(:disabled) { transform: scale(.97); }
+  #send-btn:disabled { opacity: .4; cursor: not-allowed; }
+
+  /* ── Sidebar ── */
+  .sidebar {
+    border-left: 1px solid var(--border);
+    padding-left: 24px;
+  }
+  .sidebar-title {
+    font-family: var(--mono); font-size: 11px; font-weight: 600;
+    text-transform: uppercase; letter-spacing: .1em;
+    color: var(--text-dim); margin-bottom: 16px;
+  }
+
+  #sources-list { display: flex; flex-direction: column; gap: 10px; }
+
+  .source-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 10px 12px;
+    animation: fadeUp .3s ease both;
+  }
+  .source-card:hover { border-color: var(--accent); }
+  .source-header {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 6px;
+  }
+  .source-name {
+    font-family: var(--mono); font-size: 10px;
+    color: var(--accent2); font-weight: 600;
+    max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .score-badge {
+    font-family: var(--mono); font-size: 10px;
+    background: #1a2f1a; color: var(--accent2);
+    border-radius: 4px; padding: 1px 6px;
+  }
+  .source-excerpt {
+    font-size: 11px; color: var(--text-dim);
+    line-height: 1.5;
+    display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+
+  /* ── Empty state ── */
+  .empty-state {
+    display: flex; flex-direction: column; align-items: center;
+    justify-content: center; padding: 60px 0; gap: 10px;
+    color: var(--text-dim);
+  }
+  .empty-state .icon { font-size: 32px; margin-bottom: 8px; }
+  .empty-state p { font-family: var(--mono); font-size: 12px; }
+  .suggestion-chips { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 16px; justify-content: center; }
+  .chip {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 20px; padding: 6px 14px;
+    font-size: 12px; cursor: pointer; color: var(--text-dim);
+    transition: border-color .2s, color .2s;
+  }
+  .chip:hover { border-color: var(--accent); color: var(--accent); }
+
+  .error-msg {
+    font-family: var(--mono); font-size: 12px;
+    color: var(--danger); background: #2a1515;
+    border: 1px solid var(--danger); border-radius: var(--radius);
+    padding: 8px 12px;
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">AIA <span>//</span> RAG</div>
+  <span id="status-label">connexion…</span>
+  <div class="status-dot" id="status-dot"></div>
+</header>
+
+<main>
+  <div class="chat-pane">
+    <div id="messages">
+      <div class="empty-state" id="empty-state">
+        <div class="icon">📚</div>
+        <p>Pose une question sur la documentation AIA</p>
+        <div class="suggestion-chips">
+          <div class="chip" onclick="ask(this.textContent)">Qu'est-ce que le golden ticket SSH ?</div>
+          <div class="chip" onclick="ask(this.textContent)">Comment fonctionne le déploiement K3S ?</div>
+          <div class="chip" onclick="ask(this.textContent)">Quels sont les prérequis SSH côté cible ?</div>
+          <div class="chip" onclick="ask(this.textContent)">Rôles Vault et principaux, comment ça marche ?</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="sidebar">
+    <div class="sidebar-title">Sources</div>
+    <div id="sources-list">
+      <p style="font-family:var(--mono);font-size:11px;color:var(--muted)">Les chunks pertinents apparaîtront ici.</p>
+    </div>
+  </div>
+</main>
+
+<div class="input-bar-wrap">
+  <div class="input-bar">
+    <textarea id="question" rows="1" placeholder="Pose ta question sur la doc AIA…"></textarea>
+    <button id="send-btn" onclick="sendQuery()">Envoyer →</button>
+  </div>
+</div>
+
+<script>
+const API = 'http://localhost:8000';
+
+// ── Status check ──────────────────────────────────────────────────────────────
+async function checkHealth() {
+  const dot   = document.getElementById('status-dot');
+  const label = document.getElementById('status-label');
+  try {
+    const r = await fetch(`${API}/health`, { signal: AbortSignal.timeout(3000) });
+    const d = await r.json();
+    dot.className   = 'status-dot online';
+    label.textContent = `${d.chunks_in_db} chunks indexés`;
+  } catch {
+    dot.className   = 'status-dot error';
+    label.textContent = 'serveur hors ligne';
+  }
+}
+checkHealth();
+setInterval(checkHealth, 15000);
+
+// ── Auto-resize textarea ──────────────────────────────────────────────────────
+const textarea = document.getElementById('question');
+textarea.addEventListener('input', () => {
+  textarea.style.height = 'auto';
+  textarea.style.height = Math.min(textarea.scrollHeight, 120) + 'px';
+});
+textarea.addEventListener('keydown', e => {
+  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendQuery(); }
+});
+
+// ── Send query ────────────────────────────────────────────────────────────────
+async function ask(text) {
+  textarea.value = text;
+  sendQuery();
+}
+
+async function sendQuery() {
+  const q = textarea.value.trim();
+  if (!q) return;
+
+  const btn = document.getElementById('send-btn');
+  btn.disabled = true;
+  textarea.value = '';
+  textarea.style.height = 'auto';
+
+  document.getElementById('empty-state')?.remove();
+
+  // Affiche le message user
+  appendMsg('user', 'Vous', q);
+
+  // Placeholder thinking
+  const thinkId = appendThinking();
+
+  // Update status
+  const dot = document.getElementById('status-dot');
+  dot.className = 'status-dot loading';
+
+  try {
+    const resp = await fetch(`${API}/query`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ question: q })
+    });
+
+    removeThinking(thinkId);
+
+    if (!resp.ok) throw new Error(`Erreur ${resp.status}`);
+
+    const data = await resp.json();
+    appendMsg('bot', 'Assistant', data.answer);
+    renderSources(data.sources);
+    dot.className = 'status-dot online';
+
+  } catch (err) {
+    removeThinking(thinkId);
+    appendError(`Impossible de contacter le serveur : ${err.message}`);
+    dot.className = 'status-dot error';
+  }
+
+  btn.disabled = false;
+}
+
+// ── DOM helpers ───────────────────────────────────────────────────────────────
+function appendMsg(role, roleLabel, text) {
+  const msgs = document.getElementById('messages');
+  const div  = document.createElement('div');
+  div.className = `msg ${role}`;
+  div.innerHTML = `
+    <div class="msg-avatar">${roleLabel.slice(0,2).toUpperCase()}</div>
+    <div class="msg-body">
+      <div class="msg-role">${roleLabel}</div>
+      <div class="msg-text">${escHtml(text)}</div>
+    </div>`;
+  msgs.appendChild(div);
+  div.scrollIntoView({ behavior: 'smooth', block: 'end' });
+  return div;
+}
+
+function appendThinking() {
+  const msgs = document.getElementById('messages');
+  const id   = 'think-' + Date.now();
+  const div  = document.createElement('div');
+  div.id = id;
+  div.className = 'msg bot';
+  div.innerHTML = `
+    <div class="msg-avatar">AS</div>
+    <div class="msg-body">
+      <div class="msg-role">Assistant</div>
+      <div class="thinking">
+        Analyse en cours
+        <div class="thinking-dots"><span></span><span></span><span></span></div>
+      </div>
+    </div>`;
+  msgs.appendChild(div);
+  div.scrollIntoView({ behavior: 'smooth', block: 'end' });
+  return id;
+}
+
+function removeThinking(id) {
+  document.getElementById(id)?.remove();
+}
+
+function appendError(msg) {
+  const msgs = document.getElementById('messages');
+  const div  = document.createElement('div');
+  div.innerHTML = `<div class="error-msg">⚠ ${escHtml(msg)}</div>`;
+  msgs.appendChild(div);
+}
+
+function renderSources(sources) {
+  const list = document.getElementById('sources-list');
+  list.innerHTML = '';
+  sources.forEach(s => {
+    const card = document.createElement('div');
+    card.className = 'source-card';
+    card.innerHTML = `
+      <div class="source-header">
+        <div class="source-name" title="${escHtml(s.source)}">${escHtml(s.source)}</div>
+        <div class="score-badge">${(s.score * 100).toFixed(0)}%</div>
+      </div>
+      <div class="source-excerpt">${escHtml(s.excerpt)}</div>`;
+    list.appendChild(card);
+  });
+}
+
+function escHtml(str) {
+  return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+            .replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+}
+</script>
+</body>
+</html>
