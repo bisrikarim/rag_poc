@@ -1,5 +1,13 @@
 # RAG POC
 
+![Python](https://img.shields.io/badge/Python-3.10%2B-3776AB?style=flat-square&logo=python&logoColor=white)
+![FastAPI](https://img.shields.io/badge/FastAPI-0.111%2B-009688?style=flat-square&logo=fastapi&logoColor=white)
+![Ollama](https://img.shields.io/badge/Ollama-mistral%3A7b-black?style=flat-square&logo=ollama&logoColor=white)
+![ChromaDB](https://img.shields.io/badge/ChromaDB-0.5%2B-FF6B35?style=flat-square&logo=databricks&logoColor=white)
+![Sentence Transformers](https://img.shields.io/badge/Sentence--Transformers-3.0%2B-F5A623?style=flat-square&logo=huggingface&logoColor=white)
+![License](https://img.shields.io/badge/License-MIT-green?style=flat-square)
+![Local Only](https://img.shields.io/badge/100%25-Local%20%26%20Private-27e8a7?style=flat-square&logo=shield&logoColor=white)
+
 > Retrieval-Augmented Generation on internal Confluence documentation.  
 > 100% local — no cloud, no API key required.
 
