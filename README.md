@@ -15,6 +15,22 @@
 
 ---
 
+## Screenshots
+
+### Welcome Screen
+![Welcome Screen](captures/01_welcome_screen.png)
+
+### Conversation Sidebar
+![Conversation Sidebar](captures/02_conversation_sidebar.png)
+
+### Query & Response
+![Query Response](captures/03_query_response.png)
+
+### New Chat
+![New Chat](captures/04_new_chat.png)
+
+---
+
 ## Quick Start
 
 ### 1. Clone & create virtual environment
@@ -73,6 +89,7 @@ rag_poc/
 ├── server.py           ← FastAPI server + Ollama query
 ├── static/
 │   └── index.html      ← Web interface
+├── captures/           ← UI screenshots
 ├── pdfs/               ← Drop your PDFs here (gitignored)
 ├── chroma_db/          ← Vector database, auto-created (gitignored)
 ├── requirements.txt
