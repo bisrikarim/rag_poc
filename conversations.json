@@ -1,20 +1,4 @@
 {
-  "f80d7194-566a-494b-b424-ba6111bd46f0": {
-    "id": "f80d7194-566a-494b-b424-ba6111bd46f0",
-    "title": "quels sont les Objectifs AIA métier",
-    "created_at": "2026-05-18T11:08:23.633047",
-    "updated_at": "2026-05-18T11:09:36.220266",
-    "messages": [
-      {
-        "role": "user",
-        "content": "quels sont les Objectifs AIA métier"
-      },
-      {
-        "role": "assistant",
-        "content": "Les objectifs d'AIA métier consistent à permettre aux équipes liées à un métier, comme par exemple les équipes sécurité (DMS...), de lancer des playbooks Ansible sur une large périmètre, dans le cadre d'un audit, par exemple."
-      }
-    ]
-  },
   "958c778c-12ff-462d-8032-7e705bbbb729": {
     "id": "958c778c-12ff-462d-8032-7e705bbbb729",
     "title": "explique moi le golden ticket",
@@ -28,6 +12,22 @@
       {
         "role": "assistant",
         "content": "Le \"golden ticket\" est un terme utilisé dans le contexte de sécurité informatique pour désigner un jeton SSH (Secure Shell) falsifié ou piraté qui permet à une machine non autorisée d'accéder aux ressources protégées par une authentification SSH signée.\n\nCe type d'attaque consiste à récupérer un jeton SSH valide et l'utiliser sur des machines qui ne sont pas de sa juridiction, ce qui permet à l'attaquant de bypassé les contrôles de sécurité.\n\nPour éviter cette attaque, il est important de générer une clé SSH pouvant se connecter uniquement depuis une machine AIA (Authorized Identity and Access) et de ne pas donner trop de droits à la clé SSH signée par Vault. En outre, il est nécessaire de déployer un critère permettant d'identifier le principal de la machine sur la cible au moment de la mise à disposition de la machine."
+      }
+    ]
+  },
+  "0a01b97f-fc64-45ff-92b6-762acf5dc516": {
+    "id": "0a01b97f-fc64-45ff-92b6-762acf5dc516",
+    "title": "ssh vault",
+    "created_at": "2026-05-18T11:27:16.167500",
+    "updated_at": "2026-05-18T11:29:04.298697",
+    "messages": [
+      {
+        "role": "user",
+        "content": "ssh vault"
+      },
+      {
+        "role": "assistant",
+        "content": "Dans le contexte documentaire fourni, il est question de la mise en place d'une solution d'authentification SSH signée par Vault. Les problèmes majeurs identifiés sont:\n\n1. Éviter le \"golden ticket\" : Il s'agit de garantir que la clé SSH générée est utilisée uniquement depuis une machine AIA (Autorité d'Identification Authentique).\n2. Éviter le Vault absolu : Il s'agit de limiter le nombre de principaux utilisables par un compte Vault pour éviter la non-unicité du compte Vault et la possibilité qu'il puisse signer n'importe quel Principal.\n\nPour résoudre ces problèmes, il est nécessaire d'utiliser des rôles Vault spécifiques pour limiter l'accès aux demandes de signature SSH. Les rôles sont créés avec des jetons JWT (JSON Web Token) du pipeline AWX k8s et ont des politiques définies pour permettre la création, la mise à jour et la suppression de certificats SSH signés par Vault.\n\nIl est également nécessaire de déployer deux policies spécifiques pour initialiser un ssh-ca-client-signer avec une paire de clé."
       }
     ]
   }

@@ -16,9 +16,9 @@ from sentence_transformers import SentenceTransformer
 # ── Config ────────────────────────────────────────────────────────────────────
 CHROMA_DIR  = "./chroma_db"
 COLLECTION  = "docs"
-EMBED_MODEL = "all-MiniLM-L6-v2"
-CHUNK_SIZE  = 500   # caractères
-CHUNK_OVERLAP = 80
+EMBED_MODEL   = "paraphrase-multilingual-mpnet-base-v2"
+CHUNK_SIZE    = 800   # caractères
+CHUNK_OVERLAP = 200
 # ─────────────────────────────────────────────────────────────────────────────
 
 
@@ -32,25 +32,82 @@ def extract_text_from_pdf(pdf_path: str) -> str:
 
 
 def chunk_text(text: str, source: str) -> list[dict]:
-    """Découpe le texte en chunks avec overlap."""
-    # Nettoyage basique
+    """Découpe le texte en chunks sémantiques basés sur les paragraphes."""
+    # Nettoyage
     text = re.sub(r'\n{3,}', '\n\n', text)
     text = re.sub(r'[ \t]+', ' ', text)
 
+    # Découpage par paragraphes (sauts de ligne doubles)
+    paragraphs = [p.strip() for p in re.split(r'\n{2,}', text) if p.strip()]
+
     chunks = []
-    start = 0
     idx = 0
-    while start < len(text):
-        end = start + CHUNK_SIZE
-        chunk = text[start:end]
-        if chunk.strip():
+    current_parts: list[str] = []
+    current_len = 0
+
+    for para in paragraphs:
+        para_len = len(para)
+
+        # Si le paragraphe seul dépasse CHUNK_SIZE, on le découpe à taille fixe
+        if para_len > CHUNK_SIZE:
+            # Flush le buffer courant d'abord
+            if current_parts:
+                chunk_text_val = " ".join(current_parts).strip()
+                chunks.append({
+                    "id":       f"{source}__chunk{idx}",
+                    "text":     chunk_text_val,
+                    "metadata": {"source": source, "chunk_index": idx}
+                })
+                idx += 1
+                current_parts = []
+                current_len = 0
+            # Découpage fixe avec overlap
+            start = 0
+            while start < para_len:
+                sub = para[start:start + CHUNK_SIZE]
+                if sub.strip():
+                    chunks.append({
+                        "id":       f"{source}__chunk{idx}",
+                        "text":     sub.strip(),
+                        "metadata": {"source": source, "chunk_index": idx}
+                    })
+                    idx += 1
+                start += CHUNK_SIZE - CHUNK_OVERLAP
+            continue
+
+        # Si l'ajout du paragraphe dépasse CHUNK_SIZE, on flush puis on démarre un nouveau chunk
+        # en conservant le dernier paragraphe comme overlap
+        if current_len + para_len + 1 > CHUNK_SIZE and current_parts:
+            chunk_text_val = " ".join(current_parts).strip()
             chunks.append({
                 "id":       f"{source}__chunk{idx}",
-                "text":     chunk.strip(),
+                "text":     chunk_text_val,
                 "metadata": {"source": source, "chunk_index": idx}
             })
             idx += 1
-        start += CHUNK_SIZE - CHUNK_OVERLAP
+            # Overlap : on garde les derniers paragraphes qui tiennent dans CHUNK_OVERLAP
+            overlap_parts: list[str] = []
+            overlap_len = 0
+            for p in reversed(current_parts):
+                if overlap_len + len(p) + 1 <= CHUNK_OVERLAP:
+                    overlap_parts.insert(0, p)
+                    overlap_len += len(p) + 1
+                else:
+                    break
+            current_parts = overlap_parts
+            current_len = overlap_len
+
+        current_parts.append(para)
+        current_len += para_len + 1
+
+    # Dernier chunk
+    if current_parts:
+        chunk_text_val = " ".join(current_parts).strip()
+        chunks.append({
+            "id":       f"{source}__chunk{idx}",
+            "text":     chunk_text_val,
+            "metadata": {"source": source, "chunk_index": idx}
+        })
 
     return chunks
 

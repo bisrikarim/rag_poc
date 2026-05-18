@@ -43,6 +43,16 @@ print("📦 Connexion à ChromaDB…")
 chroma_client = chromadb.PersistentClient(path=CHROMA_DIR)
 collection = chroma_client.get_collection(COLLECTION)
 
+# ── Index BM25 (construit au démarrage sur tous les documents) ────────────────
+print("🔍 Construction de l'index BM25…")
+_all = collection.get(include=["documents", "metadatas"])
+_bm25_docs: list[str]  = _all["documents"]
+_bm25_ids:  list[str]  = _all["ids"]
+_bm25_meta: list[dict] = _all["metadatas"]
+_tokenized = [doc.lower().split() for doc in _bm25_docs]
+bm25_index = BM25Okapi(_tokenized)
+print(f"✅ Index BM25 construit sur {len(_bm25_docs)} chunks")
+
 print("✅ Serveur prêt — modèle Ollama :", OLLAMA_MODEL)
 
 
@@ -155,16 +165,53 @@ def query(req: QueryRequest):
     # 1. Embedding de la question
     q_embedding = embed_model.encode([req.question]).tolist()[0]
 
-    # 2. Recherche vectorielle dans ChromaDB
+    # 2. Recherche vectorielle dans ChromaDB (on récupère plus que TOP_K pour le reranking hybride)
+    fetch_k = min(TOP_K * 3, len(_bm25_docs)) if _bm25_docs else TOP_K
     results = collection.query(
         query_embeddings=[q_embedding],
-        n_results=TOP_K,
+        n_results=fetch_k,
         include=["documents", "metadatas", "distances"]
     )
 
-    docs      = results["documents"][0]
-    metadatas = results["metadatas"][0]
-    distances = results["distances"][0]
+    vec_docs      = results["documents"][0]
+    vec_metadatas = results["metadatas"][0]
+    vec_distances = results["distances"][0]
+    vec_ids       = results["ids"][0]
+
+    # Score vectoriel normalisé (similarité cosinus : 1 - distance)
+    vec_scores = {doc_id: 1 - dist for doc_id, dist in zip(vec_ids, vec_distances)}
+
+    # 3. Recherche BM25 sur les mêmes candidats
+    tokenized_query = req.question.lower().split()
+    bm25_raw = bm25_index.get_scores(tokenized_query)  # scores pour TOUS les docs
+
+    # Normalisation BM25 (min-max)
+    bm25_max = max(bm25_raw) if max(bm25_raw) > 0 else 1.0
+    bm25_norm = [s / bm25_max for s in bm25_raw]
+
+    # Associer les scores BM25 aux ids des candidats vectoriels
+    bm25_scores: dict[str, float] = {}
+    for i, doc_id in enumerate(_bm25_ids):
+        if doc_id in vec_scores:
+            bm25_scores[doc_id] = bm25_norm[i]
+
+    # 4. Score hybride fusionné
+    hybrid_scores: dict[str, float] = {}
+    for doc_id in vec_scores:
+        v_score = vec_scores.get(doc_id, 0.0)
+        b_score = bm25_scores.get(doc_id, 0.0)
+        hybrid_scores[doc_id] = VECTOR_WEIGHT * v_score + BM25_WEIGHT * b_score
+
+    # 5. Tri par score hybride décroissant, garder TOP_K
+    top_ids = sorted(hybrid_scores, key=lambda x: hybrid_scores[x], reverse=True)[:TOP_K]
+
+    # Reconstruire les listes ordonnées
+    id_to_doc  = dict(zip(vec_ids, vec_docs))
+    id_to_meta = dict(zip(vec_ids, vec_metadatas))
+
+    docs      = [id_to_doc[i]  for i in top_ids]
+    metadatas = [id_to_meta[i] for i in top_ids]
+    distances = [1 - hybrid_scores[i] for i in top_ids]  # pseudo-distance pour compatibilité
 
     # 3. Contexte documentaire
     context_parts = []
