@@ -1,9 +1,14 @@
 """
-server.py — Serveur FastAPI RAG local (Ollama + ChromaDB)
+server.py — Serveur FastAPI RAG local (Ollama + ChromaDB + Historique persistant)
 Usage: uvicorn server:app --reload --port 8000
 """
 
+import json
+import uuid
 import requests
+from datetime import datetime
+from pathlib import Path
+
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
@@ -12,12 +17,13 @@ import chromadb
 from sentence_transformers import SentenceTransformer
 
 # ── Config ────────────────────────────────────────────────────────────────────
-CHROMA_DIR   = "./chroma_db"
-COLLECTION   = "docs"
-EMBED_MODEL  = "all-MiniLM-L6-v2"
-TOP_K        = 5
-OLLAMA_URL   = "http://localhost:11434/api/generate"
-OLLAMA_MODEL = "mistral:7b"
+CHROMA_DIR    = "./chroma_db"
+COLLECTION    = "docs"
+EMBED_MODEL   = "all-MiniLM-L6-v2"
+TOP_K         = 5
+OLLAMA_URL    = "http://localhost:11434/api/generate"
+OLLAMA_MODEL  = "mistral:7b"
+HISTORY_FILE  = "./conversations.json"
 # ─────────────────────────────────────────────────────────────────────────────
 
 app = FastAPI(title="RAG POC")
@@ -29,6 +35,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# ── Chargement au démarrage ───────────────────────────────────────────────────
 print("🤖 Chargement du modèle d'embeddings…")
 embed_model = SentenceTransformer(EMBED_MODEL)
 
@@ -39,15 +46,41 @@ collection = chroma_client.get_collection(COLLECTION)
 print("✅ Serveur prêt — modèle Ollama :", OLLAMA_MODEL)
 
 
+# ── Helpers historique ────────────────────────────────────────────────────────
+def load_history() -> dict:
+    if Path(HISTORY_FILE).exists():
+        with open(HISTORY_FILE, "r", encoding="utf-8") as f:
+            return json.load(f)
+    return {}
+
+
+def save_history(history: dict):
+    with open(HISTORY_FILE, "w", encoding="utf-8") as f:
+        json.dump(history, f, ensure_ascii=False, indent=2)
+
+
+# ── Modèles Pydantic ──────────────────────────────────────────────────────────
 class QueryRequest(BaseModel):
     question: str
+    conversation_id: str | None = None   # None = nouvelle conversation
 
 
 class QueryResponse(BaseModel):
     answer: str
     sources: list[dict]
+    conversation_id: str
+    title: str
 
 
+class ConversationMeta(BaseModel):
+    id: str
+    title: str
+    created_at: str
+    updated_at: str
+    message_count: int
+
+
+# ── Routes ────────────────────────────────────────────────────────────────────
 @app.get("/health")
 def health():
     try:
@@ -63,10 +96,61 @@ def health():
     }
 
 
+@app.get("/conversations", response_model=list[ConversationMeta])
+def list_conversations():
+    history = load_history()
+    convs = []
+    for conv_id, conv in history.items():
+        convs.append(ConversationMeta(
+            id=conv_id,
+            title=conv["title"],
+            created_at=conv["created_at"],
+            updated_at=conv["updated_at"],
+            message_count=len(conv["messages"]),
+        ))
+    # Plus récentes en premier
+    convs.sort(key=lambda x: x.updated_at, reverse=True)
+    return convs
+
+
+@app.get("/conversations/{conv_id}")
+def get_conversation(conv_id: str):
+    history = load_history()
+    if conv_id not in history:
+        raise HTTPException(status_code=404, detail="Conversation not found")
+    return history[conv_id]
+
+
+@app.delete("/conversations/{conv_id}")
+def delete_conversation(conv_id: str):
+    history = load_history()
+    if conv_id not in history:
+        raise HTTPException(status_code=404, detail="Conversation not found")
+    del history[conv_id]
+    save_history(history)
+    return {"deleted": conv_id}
+
+
 @app.post("/query", response_model=QueryResponse)
 def query(req: QueryRequest):
     if not req.question.strip():
         raise HTTPException(status_code=400, detail="Question vide.")
+
+    history = load_history()
+
+    # Créer ou charger la conversation
+    if req.conversation_id and req.conversation_id in history:
+        conv = history[req.conversation_id]
+        conv_id = req.conversation_id
+    else:
+        conv_id = str(uuid.uuid4())
+        conv = {
+            "id": conv_id,
+            "title": req.question[:60] + ("…" if len(req.question) > 60 else ""),
+            "created_at": datetime.now().isoformat(),
+            "updated_at": datetime.now().isoformat(),
+            "messages": [],
+        }
 
     # 1. Embedding de la question
     q_embedding = embed_model.encode([req.question]).tolist()[0]
@@ -82,7 +166,7 @@ def query(req: QueryRequest):
     metadatas = results["metadatas"][0]
     distances = results["distances"][0]
 
-    # 3. Construction du contexte
+    # 3. Contexte documentaire
     context_parts = []
     for doc, meta in zip(docs, metadatas):
         context_parts.append(
@@ -90,21 +174,26 @@ def query(req: QueryRequest):
         )
     context = "\n\n---\n\n".join(context_parts)
 
-    # 4. Prompt RAG (format Mistral [INST])
+    # 4. Historique de conversation pour le prompt (max 6 derniers échanges)
+    history_text = ""
+    for msg in conv["messages"][-6:]:
+        role = "User" if msg["role"] == "user" else "Assistant"
+        history_text += f"{role}: {msg['content']}\n"
+
+    # 5. Prompt RAG + historique (format Mistral [INST])
     prompt = f"""[INST] Tu es un assistant expert en documentation technique.
-Reponds uniquement en te basant sur le contexte fourni.
+Reponds uniquement en te basant sur le contexte documentaire fourni.
 Si la reponse n'est pas dans le contexte, dis-le clairement.
 Reponds en francais, de facon precise et structuree.
 
-Contexte extrait des documents :
-
+Contexte documentaire :
 {context}
 
----
+{"Historique de la conversation :" + chr(10) + history_text if history_text else ""}
 
 Question : {req.question} [/INST]"""
 
-    # 5. Appel Ollama (100% local)
+    # 6. Appel Ollama
     try:
         ollama_resp = requests.post(
             OLLAMA_URL,
@@ -112,11 +201,7 @@ Question : {req.question} [/INST]"""
                 "model":  OLLAMA_MODEL,
                 "prompt": prompt,
                 "stream": False,
-                "options": {
-                    "temperature": 0.2,
-                    "num_predict": 1024,
-                    "num_ctx":     4096,
-                }
+                "options": {"temperature": 0.2, "num_predict": 1024, "num_ctx": 4096}
             },
             timeout=180
         )
@@ -130,7 +215,15 @@ Question : {req.question} [/INST]"""
 
     answer = ollama_resp.json().get("response", "").strip()
 
-    # 6. Sources retournées
+    # 7. Sauvegarder les messages dans l'historique
+    conv["messages"].append({"role": "user",      "content": req.question})
+    conv["messages"].append({"role": "assistant",  "content": answer})
+    conv["updated_at"] = datetime.now().isoformat()
+
+    history[conv_id] = conv
+    save_history(history)
+
+    # 8. Sources
     sources = [
         {
             "source":      meta["source"],
@@ -141,8 +234,13 @@ Question : {req.question} [/INST]"""
         for doc, meta, dist in zip(docs, metadatas, distances)
     ]
 
-    return QueryResponse(answer=answer, sources=sources)
+    return QueryResponse(
+        answer=answer,
+        sources=sources,
+        conversation_id=conv_id,
+        title=conv["title"],
+    )
 
 
-# Sert l'interface web statique (index.html dans ./static/)
+# Sert l'interface web statique
 app.mount("/", StaticFiles(directory="static", html=True), name="static")
